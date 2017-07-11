@@ -36,11 +36,11 @@ public:
     virtual void render();
 
 protected:
-    void popScenes(int num);
-
-    void pushScene(std::unique_ptr<Scene> scene);
-
     SceneProperties prop;
+
+    // only if isTop === true
+    void popScenes(int num);
+    void pushScene(std::unique_ptr<Scene> scene);
 };
 
 } // meeh
