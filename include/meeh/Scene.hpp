@@ -30,6 +30,10 @@ public:
 
     // only if isTop == true
     virtual void processInput();
+    // else
+    // useful for unsetting things when new scene
+    // is pushed onto the stack
+    virtual void whenNotTop();
 
     virtual void update();
 
@@ -37,10 +41,6 @@ public:
 
 protected:
     SceneProperties prop;
-
-    // only if isTop === true
-    void popScenes(int num);
-    void pushScene(std::unique_ptr<Scene> scene);
 };
 
 } // meeh

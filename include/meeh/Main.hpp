@@ -8,7 +8,6 @@ struct SDL_Window;
 #include <array>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
-#include <mutex>
 
 namespace meeh
 {
@@ -38,7 +37,7 @@ class Main
 public:
     Main();
 
-    struct
+    struct InitOptions
     {
         int sizeX = 640;
         int sizeY = 480;
@@ -50,38 +49,52 @@ public:
         bool initMixer = false;
         int sdlWindowFlags = 0;
         int mixerFlags = 0;
-    }
-    init;
+    };
+
+    static InitOptions& getInitOptions() {return initOptions;}
 
     void start(std::unique_ptr<Scene> scene);
 
-    static void addInstance(Vertex* vertices, int count, const glm::mat4& matrix = glm::mat4(1.f));
+    static void addInstance(Vertex* vertices, int count, const glm::mat4& model = glm::mat4(1.f));
+
+    static void flushGl();
 
     static const FrameInfo& getFrameInfo() {return frameInfo;}
 
+    // executed at the end of frame
+    static void popScenes(int num);
+    static void pushScene(std::unique_ptr<Scene> scene);
+
 private:
+    static Main* mainPtr;
+    static InitOptions initOptions;
     std::vector<std::unique_ptr<Scene>> scenes;
+    std::vector<std::unique_ptr<Scene>> addedScenes;
     static FrameInfo frameInfo;
     static std::array<Vertex, 10000> vertices;
     static std::array<glm::mat4, 10000> matrices;
     struct Batch
     {
         int start;
-        int num;
+        int size;
         int numPerInstance;
+        glm::mat4 projection;
     };
     static std::vector<Batch> batches;
-    static std::mutex mutex;
 
     void loop();
-    static void renderFunction();
+    // static because it might be moved to
+    // another thread in future
+    static void render();
 
     class Renderer
     {
     public:
-
+        Renderer();
+        void render();
     private:
-    };
+    }
+    renderer;
 };
 
 } // meeh
