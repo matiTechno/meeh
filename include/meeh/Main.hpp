@@ -8,6 +8,9 @@ struct SDL_Window;
 #include <array>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
+class Texture;
+#include "GlObjects.hpp"
+#include "Shader.hpp"
 
 namespace meeh
 {
@@ -36,6 +39,7 @@ class Main
 {
 public:
     Main();
+    ~Main();
 
     struct InitOptions
     {
@@ -79,6 +83,12 @@ private:
         int size;
         int numPerInstance;
         glm::mat4 projection;
+        GLenum srcAlpha, dstAlpha;
+        GLenum primitive;
+        Texture* texture;
+        GlSampler* sampler;
+        bool isFont;
+        bool isFlipped;
     };
     static std::vector<Batch> batches;
 
@@ -93,6 +103,10 @@ private:
         Renderer();
         void render();
     private:
+        Shader shader;
+        GlVAO vao;
+        GlBO vboVert;
+        GlBO vboInstance;
     }
     renderer;
 };
