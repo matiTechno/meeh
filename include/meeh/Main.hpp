@@ -24,7 +24,6 @@ struct FrameInfo
     float avFrametime;
     glm::ivec2 fbSize;
     float aspect;
-    SDL_Window* sdlWindow;
     bool imguiWantsInput;
 };
 
@@ -53,6 +52,7 @@ public:
         bool initMixer = false;
         int sdlWindowFlags = 0;
         int mixerFlags = 0;
+        bool handleQuit = true;
     };
 
     static InitOptions& getInitOptions() {return initOptions;}
@@ -69,9 +69,12 @@ public:
     static void popScenes(int num);
     static void pushScene(std::unique_ptr<Scene> scene);
 
+    static SDL_Window* getSdlWindow() {return sdlWindow;}
+
 private:
     static Main* mainPtr;
     static InitOptions initOptions;
+    static SDL_Window* sdlWindow;
     std::vector<std::unique_ptr<Scene>> scenes;
     std::vector<std::unique_ptr<Scene>> addedScenes;
     static FrameInfo frameInfo;
@@ -88,7 +91,8 @@ private:
         Texture* texture;
         GlSampler* sampler;
         bool isFont;
-        bool isFlipped;
+        bool flippedXCoords;
+        bool projYUp;
     };
     static std::vector<Batch> batches;
 

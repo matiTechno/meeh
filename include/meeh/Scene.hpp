@@ -12,6 +12,7 @@ struct SceneProperties
     glm::ivec2 size;
     bool isOpaque = true;
     bool updateWhenNotTop = false;
+    bool autoFitToFb = true;
     bool isTop() const {return mIsTop;}
 
 private:
