@@ -11,6 +11,7 @@ struct SDL_Window;
 class Texture;
 #include "GlObjects.hpp"
 #include "Shader.hpp"
+#include "Raii.hpp"
 
 namespace meeh
 {
@@ -46,16 +47,17 @@ public:
         int sizeY = 480;
         int posX = SDL_WINDOWPOS_CENTERED;
         int posY = SDL_WINDOWPOS_CENTERED;
+        const char* title = "default";
         int glMajor = 3;
         int glMinor = 3;
         bool initImgui = false;
         bool initMixer = false;
-        int sdlWindowFlags = 0;
+        unsigned int sdlWindowFlags = 0;
         int mixerFlags = 0;
         bool handleQuit = true;
     };
 
-    static InitOptions& getInitOptions() {return initOptions;}
+    static InitOptions& getInitOptions() {assert(!mainPtr); return initOptions;}
 
     void start(std::unique_ptr<Scene> scene);
 
@@ -71,14 +73,22 @@ public:
 
     static SDL_Window* getSdlWindow() {return sdlWindow;}
 
+    static void quit() {quitV = true;}
+
 private:
+    Raii cleanSdlInit;
+    Raii cleanSdlWindow;
+    Raii cleanSdlContext;
+    Raii cleanSdlMixerInit;
+    Raii cleanImgui;
     static Main* mainPtr;
+    static bool quitV;
     static InitOptions initOptions;
     static SDL_Window* sdlWindow;
     std::vector<std::unique_ptr<Scene>> scenes;
     std::vector<std::unique_ptr<Scene>> addedScenes;
     static FrameInfo frameInfo;
-    static std::array<Vertex, 10000> vertices;
+    static std::array<Vertex, 50000> vertices;
     static std::array<glm::mat4, 10000> matrices;
     struct Batch
     {
@@ -91,15 +101,11 @@ private:
         Texture* texture;
         GlSampler* sampler;
         bool isFont;
-        bool flippedXCoords;
-        bool projYUp;
+        glm::ivec4 viewport;
     };
     static std::vector<Batch> batches;
 
     void loop();
-    // static because it might be moved to
-    // another thread in future
-    static void render();
 
     class Renderer
     {
@@ -111,8 +117,10 @@ private:
         GlVAO vao;
         GlBO vboVert;
         GlBO vboInstance;
-    }
-    renderer;
+    };
+    std::unique_ptr<Renderer> renderer;
+
+    void initMixer();
 };
 
 } // meeh

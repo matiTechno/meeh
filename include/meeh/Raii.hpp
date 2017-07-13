@@ -1,4 +1,4 @@
-#pragma oncee
+#pragma once
 
 #include <functional>
 #include <assert.h>

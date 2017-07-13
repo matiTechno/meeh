@@ -13,11 +13,7 @@ struct SceneProperties
     bool isOpaque = true;
     bool updateWhenNotTop = false;
     bool autoFitToFb = true;
-    bool isTop() const {return mIsTop;}
-
-private:
-    friend class Main;
-    bool mIsTop = true;
+    bool isTop = true;
 };
 
 class Scene
