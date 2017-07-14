@@ -10,8 +10,8 @@
 namespace meeh
 {
 
-Main* Main::mainPtr = nullptr;
-Main::InitOptions Main::initOptions;
+Main* Main::mainPtr;
+InitOptions Main::initOptions;
 SDL_Window* Main::sdlWindow;
 FrameInfo Main::frameInfo;
 std::array<Vertex, 50000> Main::vertices;
@@ -21,8 +21,9 @@ bool Main::quitV = false;
 
 Main::~Main() = default;
 
-Main::Main()
+Main::Main(const InitOptions& initOptions)
 {
+    this->initOptions = initOptions;
     mainPtr = this;
     {
         SDL_version verCompiled, verLinked;
@@ -52,6 +53,9 @@ Main::Main()
         throw std::exception();
     }
     cleanSdlInit.set([](){SDL_Quit();});
+
+    if(initOptions.initMixer)
+        initMixer();
 
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, initOptions.glMajor);
@@ -89,6 +93,13 @@ Main::Main()
            glGetString(GL_VERSION), glGetString(GL_VENDOR), glGetString(GL_RENDERER));
 
     SDL_GL_SetSwapInterval(1);
+    glEnable(GL_BLEND);
+    renderer = std::make_unique<Renderer>();
+    if(initOptions.initImgui)
+    {
+        ImGui_ImplSdlGL3_Init(sdlWindow);
+        cleanImgui.set([](){ImGui_ImplSdlGL3_Shutdown();});
+    }
 }
 
 Main::Renderer::Renderer()
@@ -104,9 +115,18 @@ void Main::loop()
 {
     while(!quitV)
     {
+        SDL_Event e;
+        while(SDL_PollEvent(&e))
+        {
+            if(e.type == SDL_QUIT && initOptions.handleQuit)
+                quitV = true;
+        }
         renderer->render();
     }
 }
+
+void Main::initMixer()
+{}
 
 void Main::Renderer::render()
 {

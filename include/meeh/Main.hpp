@@ -18,6 +18,22 @@ namespace meeh
 
 class Scene;
 
+struct InitOptions
+{
+    int sizeX = 640;
+    int sizeY = 480;
+    int posX = SDL_WINDOWPOS_CENTERED;
+    int posY = SDL_WINDOWPOS_CENTERED;
+    const char* title = "default";
+    int glMajor = 3;
+    int glMinor = 3;
+    bool initImgui = false;
+    bool initMixer = false;
+    unsigned int sdlWindowFlags = 0;
+    int mixerFlags = 0;
+    bool handleQuit = true;
+};
+
 struct FrameInfo
 {
     std::vector<SDL_Event> events;
@@ -38,26 +54,8 @@ struct Vertex
 class Main
 {
 public:
-    Main();
+    Main(const InitOptions& initOptoins = InitOptions());
     ~Main();
-
-    struct InitOptions
-    {
-        int sizeX = 640;
-        int sizeY = 480;
-        int posX = SDL_WINDOWPOS_CENTERED;
-        int posY = SDL_WINDOWPOS_CENTERED;
-        const char* title = "default";
-        int glMajor = 3;
-        int glMinor = 3;
-        bool initImgui = false;
-        bool initMixer = false;
-        unsigned int sdlWindowFlags = 0;
-        int mixerFlags = 0;
-        bool handleQuit = true;
-    };
-
-    static InitOptions& getInitOptions() {assert(!mainPtr); return initOptions;}
 
     void start(std::unique_ptr<Scene> scene);
 
@@ -79,7 +77,7 @@ private:
     Raii cleanSdlInit;
     Raii cleanSdlWindow;
     Raii cleanSdlContext;
-    Raii cleanSdlMixerInit;
+    Raii cleanSdlMixer;
     Raii cleanImgui;
     static Main* mainPtr;
     static bool quitV;
@@ -90,6 +88,7 @@ private:
     static FrameInfo frameInfo;
     static std::array<Vertex, 50000> vertices;
     static std::array<glm::mat4, 10000> matrices;
+
     struct Batch
     {
         int start;
@@ -105,13 +104,12 @@ private:
     };
     static std::vector<Batch> batches;
 
-    void loop();
-
     class Renderer
     {
     public:
         Renderer();
         void render();
+
     private:
         Shader shader;
         GlVAO vao;
@@ -120,6 +118,7 @@ private:
     };
     std::unique_ptr<Renderer> renderer;
 
+    void loop();
     void initMixer();
 };
 
