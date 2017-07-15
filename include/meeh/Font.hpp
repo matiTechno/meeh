@@ -4,6 +4,7 @@
 #include <array>
 #include <string>
 #include <glm/vec4.hpp>
+#include <memory>
 
 namespace meeh
 {
@@ -16,7 +17,7 @@ struct Font
         glm::ivec2 offset;
         glm::ivec4 texCoords;
     };
-    Texture texture;
+    std::unique_ptr<Texture> texture;
     int newLinespace;
     int ascent;
     int descent;

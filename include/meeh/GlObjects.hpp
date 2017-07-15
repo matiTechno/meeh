@@ -16,19 +16,11 @@ protected:
     GLuint id;
 };
 
-class GlTexture
+class GlTexture: public GlBase
 {
 public:
     GlTexture();
     ~GlTexture();
-    GlTexture(const GlTexture&) = delete;
-    GlTexture& operator=(const GlTexture&) = delete;
-    GlTexture(GlTexture&& rhs);
-    GlTexture& operator=(GlTexture&& rhs);
-
-private:
-    bool wasMoved = false;
-    GLuint id;
 };
 
 class GlShader: public GlBase

@@ -12,6 +12,9 @@ class Texture;
 #include "Shader.hpp"
 #include "Raii.hpp"
 
+// before using anything else from meeh framework
+// one instance of Main must be created
+// all meeh resources must be freed before Main destruction
 namespace meeh
 {
 
