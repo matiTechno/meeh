@@ -71,6 +71,8 @@ public:
 
     static void quit() {quitV = true;}
 
+    static bool isInitialized() {return mainPtr ? true : false;}
+
     // render functions
     static void addInstance(Vertex* vertices, int count, const glm::mat4& model = glm::mat4(1.f));
     static void flushGl();
@@ -80,6 +82,7 @@ public:
     // pass nullptr to use default texture sampling
     static void setSampler(GlSampler* sampler);
     static void setBlendFunc(GLenum srcAlpha, GLenum dstAlpha);
+    // always creates new batch
     static void setProjection(const glm::mat4& matrix);
     static void setFontMode(bool on);
 
@@ -101,14 +104,16 @@ private:
     static FrameInfo frameInfo;
     static std::vector<Vertex> vertices;
     static std::vector<glm::mat4> matrices;
+    bool wasStarted = false;
 
     struct Batch
     {
         int start;
         int size;
+        int startMatrices;
         int numPerInstance;
         glm::ivec4 viewport;
-        GLenum glPrimitive;
+        GLenum primitive;
         Texture* texture;
         GlSampler* sampler;
         GLenum srcAlpha, dstAlpha;
@@ -134,7 +139,7 @@ private:
     void initAudio();
     void loop();
     void setBatchViewport(const Scene& scene);
-    void addBatch();
+    static void addBatch();
 };
 
 } // meeh

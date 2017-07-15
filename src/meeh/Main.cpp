@@ -10,7 +10,7 @@
 namespace meeh
 {
 
-Main* Main::mainPtr;
+Main* Main::mainPtr = nullptr;
 InitOptions Main::initOptions;
 SDL_Window* Main::sdlWindow;
 FrameInfo Main::frameInfo;
@@ -111,7 +111,8 @@ Main::Main(const InitOptions& initOptions)
     Batch batch;
     batch.start = 0;
     batch.size = 0;
-    batch.glPrimitive = GL_TRIANGLES;
+    batch.startMatrices = 0;
+    batch.primitive = GL_TRIANGLES;
     batch.texture = nullptr;
     batch.sampler = nullptr;
     batch.srcAlpha = GL_SRC_ALPHA;
@@ -123,6 +124,8 @@ Main::Main(const InitOptions& initOptions)
 
 void Main::start(std::unique_ptr<Scene> scene)
 {
+    assert(wasStarted == false);
+    wasStarted = true;
     assert(scene);
     scenes.push_back(std::move(scene));
     loop();
@@ -137,13 +140,6 @@ void Main::loop()
         addedScenes.clear();
         numToPop = 0;
         frameInfo.events.clear();
-        {
-            auto& batch = batches.front();
-            batch = batches.back();
-            batch.start = 0;
-            batch.size = 0;
-            batches.erase(batches.begin() + 1, batches.end());
-        }
 
         int newTime = SDL_GetTicks();
         frameInfo.frametime = (newTime - time) / 1000.f;
@@ -196,9 +192,12 @@ void Main::loop()
             setBatchViewport(scene);
             scene.render();
         }
+
+        glClear(GL_COLOR_BUFFER_BIT);
         renderer->render();
         if(initOptions.initImgui)
             ImGui::Render();
+        SDL_GL_SwapWindow(getSdlWindow());
 
         for(int i = 0; i < numToPop; ++i)
             scenes.pop_back();
@@ -256,58 +255,76 @@ void Main::addBatch()
         auto& batch = batches.back();
         batch.start = prevBatch.start + prevBatch.size;
         batch.size = 0;
+        batch.startMatrices = prevBatch.start + prevBatch.size / prevBatch.numPerInstance;
     }
 }
 
 void Main::setBatchViewport(const Scene& scene)
 {
-    auto& batch = batches.back();
     glm::ivec4 viewport(scene.prop.pos.x, frameInfo.fbSize.y - (scene.prop.pos.y + scene.prop.size.y),
                         scene.prop.size.x, scene.prop.size.y);
-    if(batch.viewport != viewport)
+    if(batches.back().viewport != viewport)
         addBatch();
     batches.back().viewport = viewport;
 }
 
 void Main::addInstance(Vertex* vertices, int count, const glm::mat4& model)
 {
-    (void)vertices;
-    (void)count;
-    (void)model;
+    if(count != batches.back().numPerInstance)
+        addBatch();
+    auto& batch = batches.back();
+    batch.numPerInstance = count;
+    for(int i = 0; i < count; ++i)
+        Main::vertices[batch.start + batch.size + i] = vertices[i];
+    matrices[batch.startMatrices + batch.size / count] = model;
+    batch.size += count;
 }
 
 void Main::flushGl()
-{}
+{
+    mainPtr->renderer->render();
+}
 
 void Main::setGlPrimitive(GLenum primitive)
 {
-    (void)primitive;
+    if(batches.back().primitive != primitive)
+        addBatch();
+    batches.back().primitive = primitive;
 }
 
 void Main::setTexture(Texture* texture)
 {
-    (void)texture;
+    if(batches.back().texture != texture)
+        addBatch();
+    batches.back().texture = texture;
 }
 
 void Main::setSampler(GlSampler* sampler)
 {
-    (void)sampler;
+    if(batches.back().sampler != sampler)
+        addBatch();
+    batches.back().sampler = sampler;
 }
 
 void Main::setBlendFunc(GLenum srcAlpha, GLenum dstAlpha)
 {
-    (void)srcAlpha;
-    (void)dstAlpha;
+    if(batches.back().srcAlpha != srcAlpha || batches.back().dstAlpha != dstAlpha)
+        addBatch();
+    batches.back().srcAlpha = srcAlpha;
+    batches.back().dstAlpha = dstAlpha;
 }
 
 void Main::setProjection(const glm::mat4& matrix)
 {
-    (void)matrix;
+    addBatch();
+    batches.back().projection = matrix;
 }
 
 void Main::setFontMode(bool on)
 {
-    (void)on;
+    if(batches.back().isFont != on)
+        addBatch();
+    batches.back().isFont = on;
 }
 
 Main::Renderer::Renderer()
@@ -315,8 +332,16 @@ Main::Renderer::Renderer()
 
 void Main::Renderer::render()
 {
-    glClear(GL_COLOR_BUFFER_BIT);
-    SDL_GL_SwapWindow(getSdlWindow());
+    for(auto& batch: batches)
+    {
+        (void)batch;
+    }
+    auto& batch = batches.front();
+    batch = batches.back();
+    batch.start = 0;
+    batch.size = 0;
+    batch.startMatrices = 0;
+    batches.erase(batches.begin() + 1, batches.end());
 }
 
 } // meeh

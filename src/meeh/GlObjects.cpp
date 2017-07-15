@@ -6,7 +6,7 @@ namespace meeh
 {
 
 GlTexture::GlTexture() {glGenTextures(1, &id);}
-GlTexture::~GlTexture() {if(wasMoved == 0) glDeleteTextures(1, &id);}
+GlTexture::~GlTexture() {if(wasMoved == false) glDeleteTextures(1, &id);}
 
 GlTexture::GlTexture(GlTexture&& rhs): id(rhs.id) {rhs.wasMoved = true;}
 

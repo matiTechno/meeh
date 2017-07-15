@@ -5,4 +5,16 @@
 namespace meeh
 {
 
+Font loadFont(const std::string& filename)
+{
+    (void)filename;
+    return {};
+}
+
+Font loadFont(unsigned char* data)
+{
+    (void)data;
+    return {};
+}
+
 } // meeh
