@@ -5,7 +5,6 @@
 #include <SDL2/SDL_events.h>
 #include <glm/vec2.hpp>
 struct SDL_Window;
-#include <array>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 class Texture;
@@ -28,19 +27,21 @@ struct InitOptions
     int glMajor = 3;
     int glMinor = 3;
     bool initImgui = false;
-    bool initMixer = false;
+    bool initAudio = false;
     unsigned int sdlWindowFlags = 0;
     int mixerFlags = 0;
     bool handleQuit = true;
+    int reservedInstances = 10000;
+    int reservedVertices = 40000;
+    int reservedMixerChannels = 8;
 };
 
 struct FrameInfo
 {
     std::vector<SDL_Event> events;
     float frametime;
-    float avFrametime;
     glm::ivec2 fbSize;
-    float aspect;
+    float fbAspect;
     bool imguiWantsInput;
 };
 
@@ -59,48 +60,60 @@ public:
 
     void start(std::unique_ptr<Scene> scene);
 
-    static void addInstance(Vertex* vertices, int count, const glm::mat4& model = glm::mat4(1.f));
-
-    static void flushGl();
-
     static const FrameInfo& getFrameInfo() {return frameInfo;}
 
     // executed at the end of frame
-    static void popScenes(int num);
+    // if(num > 0) no more popCurrentScenes() calls can be made this frame
+    static void popCurrentScenes(unsigned num);
     static void pushScene(std::unique_ptr<Scene> scene);
 
     static SDL_Window* getSdlWindow() {return sdlWindow;}
 
     static void quit() {quitV = true;}
 
+    // render functions
+    static void addInstance(Vertex* vertices, int count, const glm::mat4& model = glm::mat4(1.f));
+    static void flushGl();
+    static void setGlPrimitive(GLenum primitive);
+    // pass nullptr to disable texture sampling
+    static void setTexture(Texture* texture);
+    // pass nullptr to use default texture sampling
+    static void setSampler(GlSampler* sampler);
+    static void setBlendFunc(GLenum srcAlpha, GLenum dstAlpha);
+    static void setProjection(const glm::mat4& matrix);
+    static void setFontMode(bool on);
+
 private:
     Raii cleanSdlInit;
     Raii cleanSdlWindow;
     Raii cleanSdlContext;
-    Raii cleanSdlMixer;
+    Raii cleanSdlMixerInit;
+    Raii cleanSdlMixerAudio;
     Raii cleanImgui;
     static Main* mainPtr;
     static bool quitV;
     static InitOptions initOptions;
     static SDL_Window* sdlWindow;
     std::vector<std::unique_ptr<Scene>> scenes;
+    std::vector<Scene*> scenesToRender;
     std::vector<std::unique_ptr<Scene>> addedScenes;
+    static int numToPop;
     static FrameInfo frameInfo;
-    static std::array<Vertex, 50000> vertices;
-    static std::array<glm::mat4, 10000> matrices;
+    static std::vector<Vertex> vertices;
+    static std::vector<glm::mat4> matrices;
 
     struct Batch
     {
         int start;
         int size;
         int numPerInstance;
-        glm::mat4 projection;
-        GLenum srcAlpha, dstAlpha;
-        GLenum primitive;
+        glm::ivec4 viewport;
+        GLenum glPrimitive;
         Texture* texture;
         GlSampler* sampler;
+        GLenum srcAlpha, dstAlpha;
+        glm::mat4 projection;
         bool isFont;
-        glm::ivec4 viewport;
     };
     static std::vector<Batch> batches;
 
@@ -118,8 +131,10 @@ private:
     };
     std::unique_ptr<Renderer> renderer;
 
+    void initAudio();
     void loop();
-    void initMixer();
+    void setBatchViewport(const Scene& scene);
+    void addBatch();
 };
 
 } // meeh

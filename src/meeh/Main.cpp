@@ -14,10 +14,11 @@ Main* Main::mainPtr;
 InitOptions Main::initOptions;
 SDL_Window* Main::sdlWindow;
 FrameInfo Main::frameInfo;
-std::array<Vertex, 50000> Main::vertices;
-std::array<glm::mat4, 10000> Main::matrices;
+std::vector<Vertex> Main::vertices;
+std::vector<glm::mat4> Main::matrices;
 std::vector<Main::Batch> Main::batches;
 bool Main::quitV = false;
+int Main::numToPop = 0;
 
 Main::~Main() = default;
 
@@ -43,8 +44,10 @@ Main::Main(const InitOptions& initOptions)
                verCompiled.major, verCompiled.minor, verCompiled.patch,
                verLinked->major, verLinked->minor, verLinked->patch);
     }
+    fflush(stdout);
+
     auto sdlInitFlags = SDL_INIT_VIDEO;
-    if(initOptions.initMixer)
+    if(initOptions.initAudio)
         sdlInitFlags |= SDL_INIT_AUDIO;
 
     if(SDL_Init(sdlInitFlags))
@@ -54,8 +57,8 @@ Main::Main(const InitOptions& initOptions)
     }
     cleanSdlInit.set([](){SDL_Quit();});
 
-    if(initOptions.initMixer)
-        initMixer();
+    if(initOptions.initAudio)
+        initAudio();
 
     SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, initOptions.glMajor);
@@ -91,8 +94,10 @@ Main::Main(const InitOptions& initOptions)
            "vendor:         %s\n"
            "renderer:       %s\n",
            glGetString(GL_VERSION), glGetString(GL_VENDOR), glGetString(GL_RENDERER));
+    fflush(stdout);
 
     SDL_GL_SetSwapInterval(1);
+    SDL_GL_GetDrawableSize(sdlWindow, &frameInfo.fbSize.x, &frameInfo.fbSize.y);
     glEnable(GL_BLEND);
     renderer = std::make_unique<Renderer>();
     if(initOptions.initImgui)
@@ -100,32 +105,212 @@ Main::Main(const InitOptions& initOptions)
         ImGui_ImplSdlGL3_Init(sdlWindow);
         cleanImgui.set([](){ImGui_ImplSdlGL3_Shutdown();});
     }
-}
+    vertices.reserve(initOptions.reservedVertices);
+    matrices.reserve(initOptions.reservedInstances);
 
-Main::Renderer::Renderer()
-{}
+    Batch batch;
+    batch.start = 0;
+    batch.size = 0;
+    batch.glPrimitive = GL_TRIANGLES;
+    batch.texture = nullptr;
+    batch.sampler = nullptr;
+    batch.srcAlpha = GL_SRC_ALPHA;
+    batch.dstAlpha = GL_ONE_MINUS_SRC_ALPHA;
+    batch.isFont = false;
+
+    batches.push_back(batch);
+}
 
 void Main::start(std::unique_ptr<Scene> scene)
 {
-    (void)scene;
+    assert(scene);
+    scenes.push_back(std::move(scene));
     loop();
 }
 
 void Main::loop()
 {
-    while(!quitV)
+    int time = SDL_GetTicks();
+
+    while(!quitV || scenes.empty())
     {
+        addedScenes.clear();
+        numToPop = 0;
+        frameInfo.events.clear();
+        {
+            auto& batch = batches.front();
+            batch = batches.back();
+            batch.start = 0;
+            batch.size = 0;
+            batches.erase(batches.begin() + 1, batches.end());
+        }
+
+        int newTime = SDL_GetTicks();
+        frameInfo.frametime = (newTime - time) / 1000.f;
+        newTime = time;
+
         SDL_Event e;
         while(SDL_PollEvent(&e))
         {
+            if(initOptions.initImgui)
+                ImGui_ImplSdlGL3_ProcessEvent(&e);
+
             if(e.type == SDL_QUIT && initOptions.handleQuit)
                 quitV = true;
+            frameInfo.events.push_back(e);
+        }
+        if(initOptions.initImgui)
+        {
+            ImGui_ImplSdlGL3_NewFrame(sdlWindow);
+            frameInfo.imguiWantsInput = ImGui::GetIO().WantCaptureKeyboard || ImGui::GetIO().WantCaptureMouse;
+        }
+        SDL_GL_GetDrawableSize(sdlWindow, &frameInfo.fbSize.x, &frameInfo.fbSize.y);
+        frameInfo.fbAspect = frameInfo.fbSize.x / frameInfo.fbSize.y;
+
+        for(auto& scene: scenes)
+            scene->beginFrame();
+        for(auto& scene: scenes)
+        {
+            if(scene->prop.isTop_)
+                scene->whenNotTop();
+            else
+                scene->processInput();
+        }
+        for(auto& scene: scenes)
+        {
+            if(scene->prop.updateWhenNotTop || scene->prop.isTop_)
+                scene->update();
+        }
+        scenesToRender.clear();
+        for(auto it = scenes.rbegin(); it != scenes.rend(); ++it)
+        {
+            auto& scene = **it;
+            assert(scene.prop.size.x >= 0 && scene.prop.size.y >= 0);
+            scenesToRender.push_back(&scene);
+            if(scene.prop.isOpaque)
+                break;
+        }
+        for(auto it = scenesToRender.rbegin(); it != scenesToRender.rend(); ++it)
+        {
+            auto& scene = **it;
+            setBatchViewport(scene);
+            scene.render();
         }
         renderer->render();
+        if(initOptions.initImgui)
+            ImGui::Render();
+
+        for(int i = 0; i < numToPop; ++i)
+            scenes.pop_back();
+        for(auto& newScene: addedScenes)
+            scenes.push_back(std::move(newScene));
+
+        for(auto& scene: scenes)
+            scene->prop.isTop_ = false;
+        if(scenes.size())
+            scenes.back()->prop.isTop_ = true;
     }
 }
 
-void Main::initMixer()
+void Main::popCurrentScenes(unsigned num)
+{
+    assert(numToPop == 0);
+    assert(num <= mainPtr->scenes.size());
+    numToPop = num;
+}
+
+void Main::pushScene(std::unique_ptr<Scene> scene)
+{
+    assert(scene);
+    mainPtr->addedScenes.push_back(std::move(scene));
+}
+
+void Main::initAudio()
+{
+    if(initOptions.mixerFlags)
+    {
+        int initted = Mix_Init(initOptions.mixerFlags);
+        if((initted & initOptions.mixerFlags) != initOptions.mixerFlags)
+            printf("Mix_Init failed\n"
+                   "required flags: %d\n"
+                   "returned flags: %d\n"
+                   "%s\n", initOptions.mixerFlags, initted, Mix_GetError());
+
+        cleanSdlMixerInit.set([](){Mix_Quit();});
+    }
+    if(Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, 2, 1024) == -1)
+    {
+        printf("Mix_OpenAudio failed: %s\n", Mix_GetError());
+        throw std::exception();
+    }
+    cleanSdlMixerAudio.set([](){Mix_CloseAudio();});
+    Mix_AllocateChannels(initOptions.reservedMixerChannels);
+}
+
+void Main::addBatch()
+{
+    auto& prevBatch = batches.back();
+    if(prevBatch.size)
+    {
+        batches.push_back(prevBatch);
+        auto& batch = batches.back();
+        batch.start = prevBatch.start + prevBatch.size;
+        batch.size = 0;
+    }
+}
+
+void Main::setBatchViewport(const Scene& scene)
+{
+    auto& batch = batches.back();
+    glm::ivec4 viewport(scene.prop.pos.x, frameInfo.fbSize.y - (scene.prop.pos.y + scene.prop.size.y),
+                        scene.prop.size.x, scene.prop.size.y);
+    if(batch.viewport != viewport)
+        addBatch();
+    batches.back().viewport = viewport;
+}
+
+void Main::addInstance(Vertex* vertices, int count, const glm::mat4& model)
+{
+    (void)vertices;
+    (void)count;
+    (void)model;
+}
+
+void Main::flushGl()
+{}
+
+void Main::setGlPrimitive(GLenum primitive)
+{
+    (void)primitive;
+}
+
+void Main::setTexture(Texture* texture)
+{
+    (void)texture;
+}
+
+void Main::setSampler(GlSampler* sampler)
+{
+    (void)sampler;
+}
+
+void Main::setBlendFunc(GLenum srcAlpha, GLenum dstAlpha)
+{
+    (void)srcAlpha;
+    (void)dstAlpha;
+}
+
+void Main::setProjection(const glm::mat4& matrix)
+{
+    (void)matrix;
+}
+
+void Main::setFontMode(bool on)
+{
+    (void)on;
+}
+
+Main::Renderer::Renderer()
 {}
 
 void Main::Renderer::render()

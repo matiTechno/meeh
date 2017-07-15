@@ -1,7 +1,6 @@
 #pragma once
 
 #include <glm/vec2.hpp>
-#include <memory>
 
 namespace meeh
 {
@@ -13,7 +12,10 @@ struct SceneProperties
     bool isOpaque = true;
     bool updateWhenNotTop = false;
     bool autoFitToFb = true;
-    bool isTop = true;
+    bool isTop() {return isTop_;}
+private:
+    friend class Main;
+    bool isTop_ = true;
 };
 
 class Scene
@@ -34,9 +36,11 @@ public:
 
     virtual void update();
 
+    // don't call ImGui::Render(), Main does it
     virtual void render();
 
-protected:
+    const SceneProperties& getProp() {return prop;}
+
     SceneProperties prop;
 };
 
